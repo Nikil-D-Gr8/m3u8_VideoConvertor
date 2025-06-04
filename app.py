@@ -3,34 +3,53 @@ import os
 import subprocess
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog,
-    QMessageBox, QProgressBar, QLabel
+    QMessageBox, QProgressBar, QLabel, QSpacerItem, QSizePolicy
 )
+from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
 from imageio_ffmpeg import get_ffmpeg_exe
 
 
 class HLSConverter(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Video to HLS Converter")
-        self.setFixedSize(500, 300)
+        self.setWindowTitle("🎥 Video to HLS Converter")
+        self.setMinimumSize(500, 350)
 
         self.layout = QVBoxLayout()
+        self.layout.setSpacing(15)
+        self.layout.setContentsMargins(20, 20, 20, 20)
 
-        self.label = QLabel("Select conversion mode:")
-        self.layout.addWidget(self.label)
+        title = QLabel("Video to HLS Converter")
+        title.setFont(QFont("Arial", 16, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(title)
+
+        self.instruction_label = QLabel("Choose conversion mode:")
+        self.instruction_label.setFont(QFont("Arial", 11))
+        self.layout.addWidget(self.instruction_label)
 
         self.single_button = QPushButton("Convert Single File")
+        self.single_button.setMinimumHeight(40)
         self.single_button.clicked.connect(self.convert_single_file)
         self.layout.addWidget(self.single_button)
 
         self.folder_button = QPushButton("Convert Entire Folder")
+        self.folder_button.setMinimumHeight(40)
         self.folder_button.clicked.connect(self.convert_folder)
         self.layout.addWidget(self.folder_button)
 
+        self.status_label = QLabel("")
+        self.status_label.setFont(QFont("Arial", 10))
+        self.status_label.setStyleSheet("color: green;")
+        self.layout.addWidget(self.status_label)
+
         self.progress = QProgressBar()
         self.progress.setValue(0)
+        self.progress.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.progress)
 
+        self.layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
         self.setLayout(self.layout)
 
     def get_ffmpeg_path(self):
@@ -88,6 +107,8 @@ class HLSConverter(QWidget):
                 os.makedirs(target_folder, exist_ok=True)
 
             output_path = os.path.join(target_folder, f"{base_name}.m3u8")
+            self.status_label.setText(f"Converting: {base_name}")
+            QApplication.processEvents()
 
             try:
                 subprocess.run([
@@ -106,7 +127,9 @@ class HLSConverter(QWidget):
                 continue
 
             self.progress.setValue(idx)
+            QApplication.processEvents()
 
+        self.status_label.setText("All conversions completed.")
         QMessageBox.information(self, "Done", "All conversions completed.")
 
 
