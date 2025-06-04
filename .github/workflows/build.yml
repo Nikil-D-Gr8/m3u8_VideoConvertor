@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,11 +30,10 @@ jobs:
           pyinstaller main.py --name hls-converter-linux --onefile --noconfirm
 
       - name: Upload Linux Build Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: hls-converter-linux
           path: dist/hls-converter-linux
-
 
   build-windows:
     runs-on: windows-latest
@@ -42,7 +41,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,7 +59,7 @@ jobs:
           pyinstaller main.py --name hls-converter-windows --onefile --noconfirm
 
       - name: Upload Windows Build Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: hls-converter-windows
           path: dist/hls-converter-windows.exe
