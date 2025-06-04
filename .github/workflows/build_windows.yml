@@ -1,0 +1,38 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12.3
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller -r requirements.txt
+          python -c "from imageio_ffmpeg import get_ffmpeg_exe; print(get_ffmpeg_exe())"
+
+      - name: Get FFmpeg path
+        id: ffmpeg
+        run: |
+          echo "::set-output name=ffmpeg::$(python -c "from imageio_ffmpeg import get_ffmpeg_exe; print(get_ffmpeg_exe())")"
+        shell: bash
+
+      - name: Build executable
+        run: |
+          pyinstaller main.py --onefile --add-binary "${{ steps.ffmpeg.outputs.ffmpeg }};."
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: windows-exe
+          path: dist/main.exe
