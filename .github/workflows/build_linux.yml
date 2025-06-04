@@ -33,6 +33,9 @@ jobs:
         run: |
           pyinstaller main.py --onefile --add-binary "${{ steps.ffmpeg.outputs.ffmpeg }}:."
 
+      - name: Debugging - List dist directory
+        run: ls -R dist
+
       - uses: actions/upload-artifact@v3
         with:
           name: linux-exe
