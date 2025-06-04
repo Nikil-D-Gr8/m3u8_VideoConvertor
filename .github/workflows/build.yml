@@ -1,4 +1,4 @@
-aname: Build PyQt5 HLS Converter
+name: Build PyQt5 HLS Converter
 
 on:
   push:
