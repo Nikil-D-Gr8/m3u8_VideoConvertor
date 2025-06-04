@@ -1,0 +1,66 @@
+aname: Build PyQt5 HLS Converter
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    name: Build for Linux
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Linux executable
+        run: |
+          pyinstaller main.py --name hls-converter-linux --onefile --noconfirm
+
+      - name: Upload Linux Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: hls-converter-linux
+          path: dist/hls-converter-linux
+
+
+  build-windows:
+    runs-on: windows-latest
+    name: Build for Windows
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows executable
+        run: |
+          pyinstaller main.py --name hls-converter-windows --onefile --noconfirm
+
+      - name: Upload Windows Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: hls-converter-windows
+          path: dist/hls-converter-windows.exe
