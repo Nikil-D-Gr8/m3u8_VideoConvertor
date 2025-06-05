@@ -6,8 +6,76 @@ from PyQt5.QtWidgets import (
     QMessageBox, QProgressBar, QLabel, QSpacerItem, QSizePolicy
 )
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from imageio_ffmpeg import get_ffmpeg_exe
+
+
+class ConversionThread(QThread):
+    progress_update = pyqtSignal(int, str)
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, input_files, output_dir, single_file, ffmpeg_path):
+        super().__init__()
+        self.input_files = input_files
+        self.output_dir = output_dir
+        self.single_file = single_file
+        self.ffmpeg_path = ffmpeg_path
+
+    def run(self):
+        total = len(self.input_files)
+
+        resolutions = {
+            "240p": (426, 240, "400k"),
+            "360p": (640, 360, "800k"),
+            "720p": (1280, 720, "1400k"),
+            "1080p": (1920, 1080, "3000k")
+        }
+
+        for idx, input_file in enumerate(self.input_files, start=1):
+            base_name = os.path.splitext(os.path.basename(input_file))[0]
+
+            if self.single_file:
+                target_folder = self.output_dir
+            else:
+                target_folder = os.path.join(self.output_dir, base_name)
+                os.makedirs(target_folder, exist_ok=True)
+
+            playlist_paths = []
+
+            try:
+                for res, (w, h, bitrate) in resolutions.items():
+                    out_name = f"{res}.m3u8"
+                    out_path = os.path.join(target_folder, out_name)
+                    playlist_paths.append(out_name)
+
+                    subprocess.run([
+                        self.ffmpeg_path,
+                        "-i", input_file,
+                        "-vf", f"scale=w={w}:h={h}",
+                        "-c:v", "libx264",
+                        "-b:v", bitrate,
+                        "-c:a", "aac",
+                        "-strict", "-2",
+                        "-hls_time", "10",
+                        "-hls_playlist_type", "vod",
+                        "-f", "hls",
+                        out_path
+                    ], check=True)
+
+                master_path = os.path.join(target_folder, f"{base_name}.m3u8")
+                with open(master_path, 'w') as master:
+                    master.write("#EXTM3U\n")
+                    for res, (_, _, bitrate) in resolutions.items():
+                        master.write(f"#EXT-X-STREAM-INF:BANDWIDTH={bitrate.strip('k')}000,RESOLUTION={res[:-1]}\n")
+                        master.write(f"{res}.m3u8\n")
+
+                self.progress_update.emit(idx, base_name)
+
+            except subprocess.CalledProcessError as e:
+                self.error.emit(f"Failed to convert {input_file}: {str(e)}")
+
+        self.finished.emit()
 
 
 class HLSConverter(QWidget):
@@ -67,7 +135,7 @@ class HLSConverter(QWidget):
         if not output_dir:
             return
 
-        self.run_ffmpeg_batch([input_file], output_dir, single_file=True)
+        self.start_conversion([input_file], output_dir, True)
 
     def convert_folder(self):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Folder with Video Files")
@@ -88,49 +156,30 @@ class HLSConverter(QWidget):
             QMessageBox.information(self, "No Videos", "No supported video files found in the folder.")
             return
 
-        self.run_ffmpeg_batch(video_files, output_dir)
+        self.start_conversion(video_files, output_dir, False)
 
-    def run_ffmpeg_batch(self, input_files, output_dir, single_file=False):
-        total = len(input_files)
-        self.progress.setMaximum(total)
+    def start_conversion(self, input_files, output_dir, single_file):
+        self.progress.setMaximum(len(input_files))
         self.progress.setValue(0)
+        self.status_label.setText("Starting conversion...")
 
         ffmpeg_path = self.get_ffmpeg_path()
+        self.thread = ConversionThread(input_files, output_dir, single_file, ffmpeg_path)
+        self.thread.progress_update.connect(self.update_progress)
+        self.thread.finished.connect(self.conversion_finished)
+        self.thread.error.connect(self.show_error)
+        self.thread.start()
 
-        for idx, input_file in enumerate(input_files, start=1):
-            base_name = os.path.splitext(os.path.basename(input_file))[0]
+    def update_progress(self, val, name):
+        self.progress.setValue(val)
+        self.status_label.setText(f"Converted: {name}")
 
-            if single_file:
-                target_folder = output_dir
-            else:
-                target_folder = os.path.join(output_dir, base_name)
-                os.makedirs(target_folder, exist_ok=True)
-
-            output_path = os.path.join(target_folder, f"{base_name}.m3u8")
-            self.status_label.setText(f"Converting: {base_name}")
-            QApplication.processEvents()
-
-            try:
-                subprocess.run([
-                    ffmpeg_path,
-                    "-i", input_file,
-                    "-codec:", "copy",
-                    "-start_number", "0",
-                    "-hls_time", "10",
-                    "-hls_list_size", "0",
-                    "-f", "hls",
-                    output_path
-                ], check=True)
-
-            except subprocess.CalledProcessError as e:
-                QMessageBox.critical(self, "Error", f"Failed to convert {input_file}:\n{str(e)}")
-                continue
-
-            self.progress.setValue(idx)
-            QApplication.processEvents()
-
+    def conversion_finished(self):
         self.status_label.setText("All conversions completed.")
         QMessageBox.information(self, "Done", "All conversions completed.")
+
+    def show_error(self, msg):
+        QMessageBox.critical(self, "Error", msg)
 
 
 if __name__ == "__main__":
