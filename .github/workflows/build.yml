@@ -1,236 +1,68 @@
 name: Build PyQt5 HLS Converter
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     name: Build for Linux
-    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-          
-      - name: Create spec file
-        run: |
-          cat > main.spec << 'EOF'
-          # -*- mode: python ; coding: utf-8 -*-
-          
-          import os
-          import sys
-          import shutil
-          from PyInstaller.utils.hooks import collect_data_files
-          
-          # Try to get FFmpeg from system or imageio_ffmpeg
-          ffmpeg_binaries = []
-          
-          # First try system FFmpeg
-          system_ffmpeg = shutil.which('ffmpeg')
-          if system_ffmpeg:
-              ffmpeg_binaries.append((system_ffmpeg, '.'))
-          
-          # Try to get FFmpeg from imageio_ffmpeg as fallback
-          try:
-              from imageio_ffmpeg import get_ffmpeg_exe
-              ffmpeg_path = get_ffmpeg_exe()
-              if ffmpeg_path and ffmpeg_path != system_ffmpeg:
-                  ffmpeg_binaries.append((ffmpeg_path, '.'))
-          except Exception as e:
-              print(f"Warning: Could not get FFmpeg from imageio_ffmpeg: {e}")
-          
-          # Collect imageio_ffmpeg data if available
-          try:
-              imageio_datas = collect_data_files('imageio_ffmpeg')
-          except:
-              imageio_datas = []
-          
-          block_cipher = None
-          
-          a = Analysis(
-              ['main.py'],
-              pathex=[],
-              binaries=ffmpeg_binaries,
-              datas=imageio_datas,
-              hiddenimports=[
-                  'sip',
-                  'PyQt5.sip',
-                  'imageio_ffmpeg',
-                  'imageio_ffmpeg.binaries'
-              ],
-              hookspath=[],
-              hooksconfig={},
-              runtime_hooks=[],
-              excludes=[],
-              win_no_prefer_redirects=False,
-              win_private_assemblies=False,
-              cipher=block_cipher,
-              noarchive=False,
-          )
-          
-          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-          
-          exe = EXE(
-              pyz,
-              a.scripts,
-              a.binaries,
-              a.zipfiles,
-              a.datas,
-              [],
-              name='hls-converter-linux',
-              debug=False,
-              bootloader_ignore_signals=False,
-              strip=False,
-              upx=True,
-              upx_exclude=[],
-              runtime_tmpdir=None,
-              console=True,
-              disable_windowed_traceback=False,
-              argv_emulation=False,
-              target_arch=None,
-              codesign_identity=None,
-              entitlements_file=None,
-          )
-          EOF
-          
       - name: Build Linux executable
         run: |
-          pyinstaller main.spec --noconfirm
-          
+          pyinstaller main.py --name hls-converter-linux --onefile --noconfirm --hidden-import=sip
       - name: Upload Linux Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: hls-converter-linux
           path: dist/hls-converter-linux
-
   build-windows:
     runs-on: windows-latest
     name: Build for Windows
-    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          
       - name: Install FFmpeg
         run: |
           choco install ffmpeg -y
-          
-      - name: Install Python dependencies
+          # Refresh environment variables
+          $env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-          
-      - name: Create spec file
+      - name: Find FFmpeg path and build Windows executable
         run: |
-          @"
-          # -*- mode: python ; coding: utf-8 -*-
+          # Find where choco installed FFmpeg
+          $ffmpegPath = Get-Command ffmpeg | Select-Object -ExpandProperty Source
+          $ffmpegDir = Split-Path $ffmpegPath -Parent
+          Write-Host "FFmpeg found at: $ffmpegPath"
+          Write-Host "FFmpeg directory: $ffmpegDir"
           
-          import os
-          import sys
-          import shutil
-          from PyInstaller.utils.hooks import collect_data_files
-          
-          # Try to get FFmpeg from system or imageio_ffmpeg
-          ffmpeg_binaries = []
-          
-          # First try system FFmpeg
-          system_ffmpeg = shutil.which('ffmpeg')
-          if system_ffmpeg:
-              ffmpeg_binaries.append((system_ffmpeg, '.'))
-          
-          # Try to get FFmpeg from imageio_ffmpeg as fallback
-          try:
-              from imageio_ffmpeg import get_ffmpeg_exe
-              ffmpeg_path = get_ffmpeg_exe()
-              if ffmpeg_path and ffmpeg_path != system_ffmpeg:
-                  ffmpeg_binaries.append((ffmpeg_path, '.'))
-          except Exception as e:
-              print(f"Warning: Could not get FFmpeg from imageio_ffmpeg: {e}")
-          
-          # Collect imageio_ffmpeg data if available
-          try:
-              imageio_datas = collect_data_files('imageio_ffmpeg')
-          except:
-              imageio_datas = []
-          
-          block_cipher = None
-          
-          a = Analysis(
-              ['main.py'],
-              pathex=[],
-              binaries=ffmpeg_binaries,
-              datas=imageio_datas,
-              hiddenimports=[
-                  'sip',
-                  'PyQt5.sip',
-                  'imageio_ffmpeg',
-                  'imageio_ffmpeg.binaries'
-              ],
-              hookspath=[],
-              hooksconfig={},
-              runtime_hooks=[],
-              excludes=[],
-              win_no_prefer_redirects=False,
-              win_private_assemblies=False,
-              cipher=block_cipher,
-              noarchive=False,
-          )
-          
-          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-          
-          exe = EXE(
-              pyz,
-              a.scripts,
-              a.binaries,
-              a.zipfiles,
-              a.datas,
-              [],
-              name='hls-converter-windows',
-              debug=False,
-              bootloader_ignore_signals=False,
-              strip=False,
-              upx=True,
-              upx_exclude=[],
-              runtime_tmpdir=None,
-              console=True,
-              disable_windowed_traceback=False,
-              argv_emulation=False,
-              target_arch=None,
-              codesign_identity=None,
-              entitlements_file=None,
-          )
-          "@ | Out-File -FilePath main.spec -Encoding UTF8
-          
-      - name: Build Windows executable
+          # Build with onedir and bundle FFmpeg + DLLs
+          pyinstaller main.py --name hls-converter-windows --onedir --windowed --noconfirm --add-binary="$ffmpegPath;." --add-binary="$ffmpegDir/*.dll;."
+      - name: Create distribution zip
         run: |
-          pyinstaller main.spec --noconfirm
-          
+          # Create a zip file of the entire distribution folder
+          Compress-Archive -Path "dist\hls-converter-windows\*" -DestinationPath "hls-converter-windows.zip"
       - name: Upload Windows Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: hls-converter-windows
-          path: dist/hls-converter-windows.exe
+          path: hls-converter-windows.zip
