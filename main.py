@@ -63,11 +63,12 @@ class ConversionThread(QThread):
                         out_path
                     ], check=True)
 
-                master_path = os.path.join(target_folder, f"{base_name}.m3u8")
+                master_path = os.path.join(target_folder, f"index.m3u8")
                 with open(master_path, 'w') as master:
                     master.write("#EXTM3U\n")
-                    for res, (_, _, bitrate) in resolutions.items():
-                        master.write(f"#EXT-X-STREAM-INF:BANDWIDTH={bitrate.strip('k')}000,RESOLUTION={res[:-1]}\n")
+                    for res, (w, h, bitrate) in resolutions.items():
+                        resolution_str = f"{w}x{h}"
+                        master.write(f"#EXT-X-STREAM-INF:BANDWIDTH={bitrate.strip('k')}000,RESOLUTION={resolution_str}\n")
                         master.write(f"{res}.m3u8\n")
 
                 self.progress_update.emit(idx, base_name)
