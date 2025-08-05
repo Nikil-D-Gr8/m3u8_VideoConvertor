@@ -40,23 +40,15 @@ jobs:
       - name: Install FFmpeg
         run: |
           choco install ffmpeg -y
-          # Refresh environment variables
-          $env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-      - name: Find FFmpeg path and build Windows executable
+      - name: Build Windows executable (onedir)
         run: |
-          # Find where choco installed FFmpeg
-          $ffmpegPath = Get-Command ffmpeg | Select-Object -ExpandProperty Source
-          $ffmpegDir = Split-Path $ffmpegPath -Parent
-          Write-Host "FFmpeg found at: $ffmpegPath"
-          Write-Host "FFmpeg directory: $ffmpegDir"
-          
-          # Build with onedir and bundle FFmpeg + DLLs
-          pyinstaller main.py --name hls-converter-windows --onedir --windowed --noconfirm --add-binary="$ffmpegPath;." --add-binary="$ffmpegDir/*.dll;."
+          # Just build with onedir - let the app find system FFmpeg
+          pyinstaller main.py --name hls-converter-windows --onedir --windowed --noconfirm
       - name: Create distribution zip
         run: |
           # Create a zip file of the entire distribution folder
