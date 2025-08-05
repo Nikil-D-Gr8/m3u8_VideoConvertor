@@ -1,4 +1,4 @@
-name: Build PyQt5 HLS Converter (Manual FFmpeg)
+name: Build PyQt5 HLS Converter
 
 on:
   push:
@@ -19,12 +19,10 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Download FFmpeg
+      - name: Install system dependencies
         run: |
-          wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
-          tar -xf ffmpeg-release-amd64-static.tar.xz
-          sudo cp ffmpeg-*-amd64-static/ffmpeg /usr/local/bin/
-          sudo chmod +x /usr/local/bin/ffmpeg
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
           
       - name: Install Python dependencies
         run: |
@@ -32,15 +30,91 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
           
-      - name: Build Linux executable with manual FFmpeg
+      - name: Create spec file
         run: |
-          pyinstaller main.py \
-            --name hls-converter-linux \
-            --onefile \
-            --noconfirm \
-            --hidden-import=sip \
-            --add-binary="/usr/local/bin/ffmpeg:."
-            
+          cat > main.spec << 'EOF'
+          # -*- mode: python ; coding: utf-8 -*-
+          
+          import os
+          import sys
+          import shutil
+          from PyInstaller.utils.hooks import collect_data_files
+          
+          # Try to get FFmpeg from system or imageio_ffmpeg
+          ffmpeg_binaries = []
+          
+          # First try system FFmpeg
+          system_ffmpeg = shutil.which('ffmpeg')
+          if system_ffmpeg:
+              ffmpeg_binaries.append((system_ffmpeg, '.'))
+          
+          # Try to get FFmpeg from imageio_ffmpeg as fallback
+          try:
+              from imageio_ffmpeg import get_ffmpeg_exe
+              ffmpeg_path = get_ffmpeg_exe()
+              if ffmpeg_path and ffmpeg_path != system_ffmpeg:
+                  ffmpeg_binaries.append((ffmpeg_path, '.'))
+          except Exception as e:
+              print(f"Warning: Could not get FFmpeg from imageio_ffmpeg: {e}")
+          
+          # Collect imageio_ffmpeg data if available
+          try:
+              imageio_datas = collect_data_files('imageio_ffmpeg')
+          except:
+              imageio_datas = []
+          
+          block_cipher = None
+          
+          a = Analysis(
+              ['main.py'],
+              pathex=[],
+              binaries=ffmpeg_binaries,
+              datas=imageio_datas,
+              hiddenimports=[
+                  'sip',
+                  'PyQt5.sip',
+                  'imageio_ffmpeg',
+                  'imageio_ffmpeg.binaries'
+              ],
+              hookspath=[],
+              hooksconfig={},
+              runtime_hooks=[],
+              excludes=[],
+              win_no_prefer_redirects=False,
+              win_private_assemblies=False,
+              cipher=block_cipher,
+              noarchive=False,
+          )
+          
+          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+          
+          exe = EXE(
+              pyz,
+              a.scripts,
+              a.binaries,
+              a.zipfiles,
+              a.datas,
+              [],
+              name='hls-converter-linux',
+              debug=False,
+              bootloader_ignore_signals=False,
+              strip=False,
+              upx=True,
+              upx_exclude=[],
+              runtime_tmpdir=None,
+              console=True,
+              disable_windowed_traceback=False,
+              argv_emulation=False,
+              target_arch=None,
+              codesign_identity=None,
+              entitlements_file=None,
+          )
+          EOF
+          
+      - name: Build Linux executable
+        run: |
+          pyinstaller main.spec --noconfirm
+          
       - name: Upload Linux Build Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -60,12 +134,9 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Download FFmpeg for Windows
+      - name: Install FFmpeg
         run: |
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
-          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "."
-          $ffmpegPath = Get-ChildItem -Path "." -Name "ffmpeg-*" -Directory | Select-Object -First 1
-          Copy-Item -Path "$ffmpegPath/bin/ffmpeg.exe" -Destination "ffmpeg.exe"
+          choco install ffmpeg -y
           
       - name: Install Python dependencies
         run: |
@@ -73,9 +144,90 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
           
-      - name: Build Windows executable with manual FFmpeg
+      - name: Create spec file
         run: |
-          pyinstaller main.py --name hls-converter-windows --onefile --windowed --noconfirm --add-binary="ffmpeg.exe;."
+          @"
+          # -*- mode: python ; coding: utf-8 -*-
+          
+          import os
+          import sys
+          import shutil
+          from PyInstaller.utils.hooks import collect_data_files
+          
+          # Try to get FFmpeg from system or imageio_ffmpeg
+          ffmpeg_binaries = []
+          
+          # First try system FFmpeg
+          system_ffmpeg = shutil.which('ffmpeg')
+          if system_ffmpeg:
+              ffmpeg_binaries.append((system_ffmpeg, '.'))
+          
+          # Try to get FFmpeg from imageio_ffmpeg as fallback
+          try:
+              from imageio_ffmpeg import get_ffmpeg_exe
+              ffmpeg_path = get_ffmpeg_exe()
+              if ffmpeg_path and ffmpeg_path != system_ffmpeg:
+                  ffmpeg_binaries.append((ffmpeg_path, '.'))
+          except Exception as e:
+              print(f"Warning: Could not get FFmpeg from imageio_ffmpeg: {e}")
+          
+          # Collect imageio_ffmpeg data if available
+          try:
+              imageio_datas = collect_data_files('imageio_ffmpeg')
+          except:
+              imageio_datas = []
+          
+          block_cipher = None
+          
+          a = Analysis(
+              ['main.py'],
+              pathex=[],
+              binaries=ffmpeg_binaries,
+              datas=imageio_datas,
+              hiddenimports=[
+                  'sip',
+                  'PyQt5.sip',
+                  'imageio_ffmpeg',
+                  'imageio_ffmpeg.binaries'
+              ],
+              hookspath=[],
+              hooksconfig={},
+              runtime_hooks=[],
+              excludes=[],
+              win_no_prefer_redirects=False,
+              win_private_assemblies=False,
+              cipher=block_cipher,
+              noarchive=False,
+          )
+          
+          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+          
+          exe = EXE(
+              pyz,
+              a.scripts,
+              a.binaries,
+              a.zipfiles,
+              a.datas,
+              [],
+              name='hls-converter-windows',
+              debug=False,
+              bootloader_ignore_signals=False,
+              strip=False,
+              upx=True,
+              upx_exclude=[],
+              runtime_tmpdir=None,
+              console=True,
+              disable_windowed_traceback=False,
+              argv_emulation=False,
+              target_arch=None,
+              codesign_identity=None,
+              entitlements_file=None,
+          )
+          "@ | Out-File -FilePath main.spec -Encoding UTF8
+          
+      - name: Build Windows executable
+        run: |
+          pyinstaller main.spec --noconfirm
           
       - name: Upload Windows Build Artifact
         uses: actions/upload-artifact@v4
